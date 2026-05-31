@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/lib/supabase";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -180,21 +181,62 @@ export default function AssignmentsTab({ courseId, assignments, courseName, cour
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["assignments", courseId] });
 
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Assignment.create(data),
-    onSuccess: () => { invalidate(); setAdding(false); },
-  });
+const createMutation = useMutation({
+  mutationFn: async (data) => {
+    const { data: result, error } = await supabase
+      .from("assignments")
+      .insert([{
+        ...data,
+        due_date: data.due_date || null,
+      }])
+      .select();
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Assignment.update(id, data),
-    onSuccess: () => { invalidate(); setEditingAssignment(null); },
-  });
+    if (error) throw error;
+    return result;
+  },
+  onSuccess: () => { invalidate(); setAdding(false); },
+  onError: (error) => {
+    console.error(error);
+    alert(error.message);
+  },
+});
 
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Assignment.delete(id),
-    onSuccess: invalidate,
-  });
+const updateMutation = useMutation({
+  mutationFn: async ({ id, data }) => {
+    const { data: result, error } = await supabase
+      .from("assignments")
+      .update({
+        ...data,
+        due_date: data.due_date || null,
+      })
+      .eq("id", id)
+      .select();
 
+    if (error) throw error;
+    return result;
+  },
+  onSuccess: () => { invalidate(); setEditingAssignment(null); },
+  onError: (error) => {
+    console.error(error);
+    alert(error.message);
+  },
+});
+
+const deleteMutation = useMutation({
+  mutationFn: async (id) => {
+    const { error } = await supabase
+      .from("assignments")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+  onSuccess: invalidate,
+  onError: (error) => {
+    console.error(error);
+    alert(error.message);
+  },
+});
   return (
     <div className="bg-white border rounded-2xl overflow-hidden">
       {/* Header */}
