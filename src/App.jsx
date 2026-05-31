@@ -21,6 +21,7 @@ import AppLayout from './components/layout/AppLayout';
 import GardenFocusRoom from './pages/GardenFocusRoom';
 import ResetRoom from './pages/ResetRoom';
 import Reflections from './pages/Reflections';
+import SupabaseTest from './pages/SupabaseTest';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -59,6 +60,7 @@ const AuthenticatedApp = () => {
         <Route path="/community" element={<Community />} />
         <Route path="/coach" element={<StudyCoach />} />
         <Route path="/insights" element={<Insights />} />
+        <Route path="/supabase-test" element={<SupabaseTest />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

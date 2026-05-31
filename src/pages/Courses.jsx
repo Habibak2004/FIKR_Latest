@@ -41,10 +41,40 @@ const { data: courses = [], isLoading } = useQuery({
   },
 });
 
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Course.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["courses"] }); setShowAdd(false); },
-  });
+const createMutation = useMutation({
+  mutationFn: async (data) => {
+    console.log("Creating course with:", data);
+
+    const { data: result, error } = await supabase
+      .from("courses")
+      .insert([{
+        name: data.name,
+        code: data.code,
+        professor: data.professor,
+        semester: data.semester,
+        status: data.status || "active",
+        progress: 0,
+        color: data.color,
+        icon: data.icon,
+      }])
+      .select();
+
+    console.log("Supabase create result:", result);
+    console.log("Supabase create error:", error);
+
+    if (error) throw error;
+
+    return result;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["courses"] });
+    setShowAdd(false);
+  },
+  onError: (error) => {
+    console.error("Create course failed:", error);
+    alert(error.message);
+  },
+});
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
