@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
@@ -27,11 +28,18 @@ export default function Courses() {
 
   useEffect(() => { base44.auth.me().then(u => setUserEmail(u?.email)).catch(() => {}); }, []);
 
-  const { data: courses = [], isLoading } = useQuery({
-    queryKey: ["courses", userEmail],
-    queryFn: () => base44.entities.Course.filter({ created_by: userEmail }, "-created_date", 50),
-    enabled: !!userEmail,
-  });
+const { data: courses = [], isLoading } = useQuery({
+  queryKey: ["courses"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("courses")
+      .select("*");
+
+    if (error) throw error;
+
+    return data || [];
+  },
+});
 
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.Course.create(data),
