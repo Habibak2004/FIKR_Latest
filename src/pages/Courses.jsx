@@ -76,19 +76,53 @@ const createMutation = useMutation({
   },
 });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id) => {
-      const assignments = await base44.entities.Assignment.filter({ course_id: id });
-      await Promise.all(assignments.map(a => base44.entities.Assignment.delete(a.id)));
-      await base44.entities.Course.delete(id);
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["courses"] }),
-  });
+const deleteMutation = useMutation({
+  mutationFn: async (id) => {
+    const { error } = await supabase
+      .from("courses")
+      .delete()
+      .eq("id", id);
 
-  const editMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Course.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["courses"] }); setEditCourse(null); },
-  });
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["courses"] });
+  },
+  onError: (error) => {
+    console.error(error);
+    alert(error.message);
+  },
+});
+
+const editMutation = useMutation({
+  mutationFn: async ({ id, data }) => {
+    const { data: result, error } = await supabase
+      .from("courses")
+      .update({
+        name: data.name,
+        code: data.code,
+        professor: data.professor,
+        semester: data.semester,
+        semester_start: data.semester_start || null,
+        semester_end: data.semester_end || null,
+        status: data.status,
+      })
+      .eq("id", id)
+      .select();
+
+    if (error) throw error;
+
+    return result;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["courses"] });
+    setEditCourse(null);
+  },
+  onError: (error) => {
+    console.error(error);
+    alert(error.message);
+  },
+});
 
   const { data: focusSessions = [] } = useQuery({
     queryKey: ["focus-sessions", userEmail],
