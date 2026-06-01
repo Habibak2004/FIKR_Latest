@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target, Flame, Brain, TrendingUp, Clock, Sparkles } from "lucide-react";
@@ -11,35 +10,61 @@ import SessionHistory from "@/components/insights/SessionHistory";
 import MyGardenSection from "@/components/insights/MyGardenSection";
 
 export default function Insights() {
-  const [userEmail, setUserEmail] = useState(null);
-  useState(() => { base44.auth.me().then(u => setUserEmail(u?.email)).catch(() => {}); });
-
   const { data: sessions = [] } = useQuery({
-    queryKey: ["focus-sessions", userEmail],
-    queryFn: () => base44.entities.FocusSession.filter({ created_by: userEmail }, "-created_date", 200),
-    enabled: !!userEmail,
+    queryKey: ["focus-sessions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("focus_sessions")
+        .select("*")
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
   });
 
-  const { data: courses = [] } = useQuery({
-    queryKey: ["courses", userEmail],
-    queryFn: () => base44.entities.Course.filter({ created_by: userEmail }, "-created_date", 50),
-    enabled: !!userEmail,
-  });
+const { data: studySessions = [] } = useQuery({
+  queryKey: ["study-sessions"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("study_sessions")
+      .select("*")
+      .order("date", { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+});
+
+const { data: courses = [] } = useQuery({
+  queryKey: ["courses"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("courses")
+      .select("*");
+
+    if (error) throw error;
+    return data || [];
+  },
+});
+
+const allSessions = [...sessions, ...studySessions];
 
   // Focus score over time (last 14 days)
   const today = new Date();
   const focusByDay = Array.from({ length: 14 }, (_, i) => {
     const date = subDays(today, 13 - i);
     const dateStr = format(date, "yyyy-MM-dd");
-    const dayMinutes = sessions.filter(s => s.date === dateStr).reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
-    return { date: format(date, "MMM d"), minutes: dayMinutes, score: Math.min(100, Math.round((dayMinutes / 120) * 100)) };
+    const dayMinutes = allSessions
+      .filter(s => s.date === dateStr)
+      .reduce((sum, s) => sum + (s.duration_minutes || 0), 0);    return { date: format(date, "MMM d"), minutes: dayMinutes, score: Math.min(100, Math.round((dayMinutes / 120) * 100)) };
   });
 
   // Study streak
   let streak = 0;
   for (let i = 0; i < 30; i++) {
     const date = format(subDays(today, i), "yyyy-MM-dd");
-    const has = sessions.some(s => s.date === date);
+  const has = allSessions.some(s => s.date === date);
     if (has || i === 0) streak++;
     else break;
   }
@@ -54,8 +79,10 @@ export default function Insights() {
     color: c.color || "#0061a4",
   }));
 
-  const totalMinutes = sessions.reduce((s, sess) => s + (sess.duration_minutes || 0), 0);
-
+const totalMinutes = allSessions.reduce(
+  (s, sess) => s + (sess.duration_minutes || 0),
+  0
+);
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
       <div>
@@ -152,11 +179,10 @@ export default function Insights() {
       </div>
 
       {/* My Garden */}
-      <MyGardenSection userEmail={userEmail} />
+       <MyGardenSection />
 
       {/* Session History */}
-      <SessionHistory courses={courses} userEmail={userEmail} />
-
+        <SessionHistory courses={courses} />
       {/* AI Summary */}
       <Card className="p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/5 border-0">
         <div className="flex items-center gap-3 mb-4">

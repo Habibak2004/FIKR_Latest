@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Leaf } from "lucide-react";
 import PlantStage from "@/components/focus-room/garden/PlantStage";
@@ -26,24 +25,38 @@ export default function GardenSetup({ onPlanReady }) {
   const [isTyping, setIsTyping] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
   const [pendingPlan, setPendingPlan] = useState(null);
-  const [userEmail, setUserEmail] = useState(null);
   const unsubRef = useRef(null);
   const endRef = useRef(null);
   const lastCount = useRef(0);
 
-  useEffect(() => { base44.auth.me().then(u => setUserEmail(u?.email)).catch(() => {}); }, []);
 
-  const { data: courses = [] } = useQuery({
-    queryKey: ["courses", userEmail],
-    queryFn: () => base44.entities.Course.filter({ created_by: userEmail }, "-created_date", 50),
-    enabled: !!userEmail,
-  });
+const { data: courses = [] } = useQuery({
+  queryKey: ["courses"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("courses")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  const { data: assignments = [] } = useQuery({
-    queryKey: ["assignments", selectedCourse?.id, userEmail],
-    queryFn: () => base44.entities.Assignment.filter({ course_id: selectedCourse.id, created_by: userEmail, completed: false }),
-    enabled: !!selectedCourse && !!userEmail,
-  });
+    if (error) throw error;
+    return data || [];
+  },
+});
+
+const { data: assignments = [] } = useQuery({
+  queryKey: ["assignments", selectedCourse?.id],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select("*")
+      .eq("course_id", selectedCourse.id)
+      .eq("completed", false);
+
+    if (error) throw error;
+    return data || [];
+  },
+  enabled: !!selectedCourse,
+});
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isTyping]);
 

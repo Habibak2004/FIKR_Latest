@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { base44 } from "@/api/base44Client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, Square, Settings2, Leaf } from "lucide-react";
@@ -41,15 +40,40 @@ export default function FocusRoom() {
   const elapsedRef = useRef(0); // total seconds elapsed (for droplet calc)
   const queryClient = useQueryClient();
 
-  const { data: courses = [] } = useQuery({
-    queryKey: ["courses"],
-    queryFn: () => base44.entities.Course.list("-created_date", 50),
-  });
+const { data: courses = [], isLoading: coursesLoading, error: coursesError } = useQuery({
+  queryKey: ["courses"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("courses")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  const saveMutation = useMutation({
-    mutationFn: (data) => base44.entities.FocusSession.create(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["focus-sessions"] }),
-  });
+    if (error) {
+      console.error("Courses load error:", error);
+      throw error;
+    }
+
+    console.log("Loaded courses:", data);
+    return data || [];
+  },
+});
+
+const saveMutation = useMutation({
+  mutationFn: async (data) => {
+    const { error } = await supabase
+      .from("focus_sessions")
+      .insert([data]);
+
+    if (error) {
+      console.error("Focus session save error:", error);
+      alert(error.message);
+      throw error;
+    }
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["focus-sessions"] });
+  },
+});
 
   // Main timer tick
   useEffect(() => {
@@ -219,6 +243,15 @@ export default function FocusRoom() {
         </div>
 
         {/* Course selector */}
+        {coursesError && (
+  <p className="text-xs text-red-500">
+    Failed to load courses: {coursesError.message}
+  </p>
+)}
+
+{coursesLoading && (
+  <p className="text-xs text-stone-400">Loading courses...</p>
+)}
         <Select value={selectedCourse} onValueChange={setSelectedCourse}>
           <SelectTrigger className="rounded-2xl border-stone-200 bg-white/80 text-sm h-10">
             <SelectValue placeholder="Studying for… (optional)" />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -134,25 +134,54 @@ function LogModal({ open, onClose, courses, onSave, isSaving }) {
   );
 }
 
-export default function SessionHistory({ courses, userEmail }) {
+export default function SessionHistory({ courses }) {
   const [showLog, setShowLog] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: studySessions = [] } = useQuery({
-    queryKey: ["study-sessions", userEmail],
-    queryFn: () => base44.entities.StudySession.filter({ created_by: userEmail }, "-created_date", 100),
-    enabled: !!userEmail,
-  });
+  queryKey: ["study-sessions"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("study_sessions")
+      .select("*")
+      .order("date", { ascending: false });
 
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.StudySession.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["study-sessions"] }); setShowLog(false); },
-  });
+    if (error) throw error;
+    return data || [];
+  },
+});
 
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.StudySession.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["study-sessions"] }),
-  });
+const createMutation = useMutation({
+  mutationFn: async (data) => {
+    const { error } = await supabase
+      .from("study_sessions")
+      .insert([data]);
+
+    if (error) {
+  console.error("Study session create error:", error);
+  alert(error.message);
+  throw error;
+}
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["study-sessions"] });
+    setShowLog(false);
+  },
+});
+
+const deleteMutation = useMutation({
+  mutationFn: async (id) => {
+    const { error } = await supabase
+      .from("study_sessions")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["study-sessions"] });
+  },
+});
 
   // Group by date
   const grouped = studySessions.reduce((acc, s) => {
