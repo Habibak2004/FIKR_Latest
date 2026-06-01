@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,49 +25,104 @@ import TodayEngine from "@/components/planner/TodayEngine";
 export default function Planner() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [userEmail, setUserEmail] = useState(null);
   const [catchupMode, setCatchupMode] = useState(false);
   const [pausedTask, setPausedTask] = useState(null);
   const [taskView, setTaskView] = useState("today"); // "today" | "list" | "weekly" | "monthly"
   const [calendarDate, setCalendarDate] = useState(new Date());
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    base44.auth.me().then(u => setUserEmail(u?.email)).catch(() => {});
-  }, []);
 
-  const { data: assignments = [] } = useQuery({
-    queryKey: ["assignments", userEmail],
-    queryFn: () => base44.entities.Assignment.filter({ created_by: userEmail }, "-due_date", 200),
-    enabled: !!userEmail,
-  });
+const { data: assignments = [] } = useQuery({
+  queryKey: ["assignments"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select("*")
+      .order("due_date", { ascending: true });
 
-  const { data: courses = [] } = useQuery({
-    queryKey: ["courses", userEmail],
-    queryFn: () => base44.entities.Course.filter({ created_by: userEmail }, "-created_date", 50),
-    enabled: !!userEmail,
-  });
+    if (error) throw error;
+    return data || [];
+  },
+});
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, completed }) => base44.entities.Assignment.update(id, { completed, status: completed ? "submitted" : "pending" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assignments"] }),
-  });
+const { data: courses = [] } = useQuery({
+  queryKey: ["courses"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("courses")
+      .select("*");
 
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Assignment.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["assignments"] }); setShowAdd(false); },
-  });
+    if (error) throw error;
+    return data || [];
+  },
+});
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Assignment.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assignments"] }),
-  });
+const toggleMutation = useMutation({
+  mutationFn: async ({ id, completed }) => {
+    const { error } = await supabase
+      .from("assignments")
+      .update({
+        completed,
+        status: completed ? "submitted" : "pending",
+      })
+      .eq("id", id);
 
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Assignment.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assignments"] }),
-  });
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["assignments"] });
+  },
+});
 
+const createMutation = useMutation({
+  mutationFn: async (data) => {
+    const { error } = await supabase
+      .from("assignments")
+      .insert([
+        {
+          ...data,
+          due_date: data.due_date || null,
+        },
+      ]);
+
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["assignments"] });
+    setShowAdd(false);
+  },
+});
+
+const updateMutation = useMutation({
+  mutationFn: async ({ id, data }) => {
+    const { error } = await supabase
+      .from("assignments")
+      .update({
+        ...data,
+        due_date: data.due_date || null,
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["assignments"] });
+  },
+});
+
+const deleteMutation = useMutation({
+  mutationFn: async (id) => {
+    const { error } = await supabase
+      .from("assignments")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["assignments"] });
+  },
+});
   const now = new Date();
   const overdue = assignments.filter(a => !a.completed && a.due_date && isBefore(new Date(a.due_date), now));
   const isOverloaded = overdue.length >= 3 || assignments.filter(a => !a.completed).length > 10;
@@ -154,7 +209,7 @@ export default function Planner() {
         <AICommandBar
           assignments={assignments}
           onModeChange={handleModeChange}
-          onAddTasks={(tasks) => tasks.forEach(t => createMutation.mutate({ name: t.name, due_date: t.due_date || "", priority: t.priority || "medium", type: "homework", course_id: "" }))}
+          onAddTasks={(tasks) => tasks.forEach(t => createMutation.mutate({ name: t.name, due_date: t.due_date || null, priority: t.priority || "medium", type: "homework", course_id: null }))}
         />
       </div>
 
@@ -235,7 +290,7 @@ export default function Planner() {
                 onStartFocus={handleStartFocus}
                 onToggle={handleToggle}
                 onUpdate={(id, data) => updateMutation.mutate({ id, data })}
-                onQuickAdd={(name) => createMutation.mutate({ name, priority: "medium", type: "homework", course_id: "" })}
+                onQuickAdd={(name) => createMutation.mutate({ name, priority: "medium", type: "homework", course_id: null })}
                 allAssignments={assignments}
                 onEdit={(task) => setEditingTask(task)}
               />

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { base44 } from "@/api/base44Client";
 import { CalendarClock, Loader2, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Zap, Clock } from "lucide-react";
 import { differenceInDays, format, parseISO } from "date-fns";
 
