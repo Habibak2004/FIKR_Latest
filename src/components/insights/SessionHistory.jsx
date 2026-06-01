@@ -151,6 +151,19 @@ export default function SessionHistory({ courses }) {
   },
 });
 
+const { data: focusSessions = [] } = useQuery({
+  queryKey: ["focus-sessions"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("focus_sessions")
+      .select("*")
+      .order("date", { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+});
+
 const createMutation = useMutation({
   mutationFn: async (data) => {
     const { error } = await supabase
@@ -184,12 +197,31 @@ const deleteMutation = useMutation({
 });
 
   // Group by date
-  const grouped = studySessions.reduce((acc, s) => {
-    const key = s.date || format(new Date(s.created_date), "yyyy-MM-dd");
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(s);
-    return acc;
-  }, {});
+const allSessions = [
+  ...studySessions,
+
+  ...focusSessions.map((s) => ({
+    ...s,
+    session_type: s.type || "pomodoro",
+    location: s.location || "other",
+    mood: s.mood || "",
+    notes: s.notes || "Focus timer session",
+    course_name: s.course_name || "Focus Timer",
+    course_color: s.course_color || "#5a9a6f",
+  })),
+];
+
+// Group by date
+const grouped = allSessions.reduce((acc, s) => {
+  const key = s.date || format(new Date(), "yyyy-MM-dd");
+
+  if (!acc[key]) {
+    acc[key] = [];
+  }
+
+  acc[key].push(s);
+  return acc;
+}, {});
 
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
